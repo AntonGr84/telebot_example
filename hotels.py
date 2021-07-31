@@ -5,6 +5,7 @@ from requests import request
 from json import loads
 from datetime import date
 from datetime import timedelta
+from env import HOTELS_KEY, HOTELS_HOST
 
 
 class Hotel:
@@ -23,8 +24,8 @@ class Hotel:
 class HotelsRequest:
     # Заголовки для подключения к API сайта hotels.com
     headers = {
-        'x-rapidapi-key': "d8aa339558msh40a8e99abf36cc1p191ffbjsnb76f5d39f02f",
-        'x-rapidapi-host': "hotels4.p.rapidapi.com"
+        'x-rapidapi-key': HOTELS_KEY,
+        'x-rapidapi-host': HOTELS_HOST
     }
     # Максимальное количество отелей в результате поиска
     MAX_CITIES = 10
@@ -84,22 +85,22 @@ class HotelsRequest:
             return None
         return False
 
-    def get_responce(self) -> Optional[str]:
-        """Получение и разбор результата поиска
+    def _get_site_responce(self, page: int = 1) -> Optional[list]:
+        """Получение ответа сайта и преобразование текста ответа в словарь
+
+        Args:
+            page (int, optional): Номер страницы для запроса. Defaults to 1.
 
         Returns:
-            Optional[str]:  форматированная строка с результатами поиска
-                            None - если в процессе формирования запроса
-                            произошли какие-то ошибки
+            Optional[list]: список с результатами поиска
         """
         # Ссылка запроса к API сайта
         url = "https://hotels4.p.rapidapi.com/properties/list"
 
         # Параметры запроса
-        page_number: int = 1
         query_string: dict[str, Union[int, str]] = {
             "adults1": "1",
-            "pageNumber": str(page_number),
+            "pageNumber": str(page),
             "destinationId": str(self.city_id),
             "checkOut": str(date.today() + timedelta(days=3)),
             "checkIn": str(date.today() + timedelta(days=2)),
@@ -117,56 +118,31 @@ class HotelsRequest:
             query_string['sortOrder'] = "DISTANCE_FROM_LANDMARK"
         else:
             return None
-        results_list: list[Hotel] = list()
-        finish_loop: bool = False
         try:
-            while not finish_loop:
-                response = request(
-                    "GET",
-                    url,
-                    headers=self.headers,
-                    params=query_string
-                )
-                # Если запрос вернул не успешный результат
-                if response.status_code != 200:
-                    return None
-                responce_to_dict: dict = \
-                    (loads(response.text))['data']['body']['searchResults']
-                for hotel in responce_to_dict['results']:
-                    distance: Optional[float] = None
-                    for landmark in hotel['landmarks']:
-                        if landmark['label'] == 'Центр города':
-                            distance = float(
-                                str(landmark['distance'])
-                                .split(sep=' ')[0]
-                                .replace(',', '.')
-                            )
-                        break
-                    if self.request_type == 'bestdeal':
-                        if distance < self.min_distance:
-                            continue
-                        if distance > self.max_distance:
-                            finish_loop = True
-                            break
-                    results_list.append(
-                        Hotel(
-                            name=hotel['name'],
-                            address=hotel['address']['streetAddress'],
-                            distance=distance,
-                            price=int(
-                                str(hotel['ratePlan']['price']['current'])
-                                .split(sep=' ')[0]
-                                .replace(',', '')
-                            )
-                        )
-                    )
-                    if len(results_list) == self.hotels_count:
-                        finish_loop = True
-                        break
-                page_number += 1
-                query_string["pageNumber"] = str(page_number)
+            response = request(
+                "GET",
+                url,
+                headers=self.headers,
+                params=query_string
+            )
+            # Если запрос вернул не успешный результат
+            if response.status_code != 200:
+                return None
         except ConnectionError:
             return None
+        return (
+            loads(response.text)
+        )['data']['body']['searchResults']['results']
+
+    def _get_result_str(self, results_list: list[Hotel]) -> str:
+        """Получение строки результата пригодной для вывода в бота
+
+        Args:
+            results_list (list[Hotel]): список отелей в результате поиска
+
+        Returns:
+            str: строка-результат
+        """
         result_str: str = ''
         for hotel in results_list:
             result_str += '*{}*\r\n{}\r\n'.format(
@@ -178,3 +154,56 @@ class HotelsRequest:
                 hotel.price
             )
         return result_str
+
+    def get_responce(self) -> Optional[str]:
+        """Получение и разбор результата поиска
+
+        Returns:
+            Optional[str]:  форматированная строка с результатами поиска
+                            None - если в процессе формирования запроса
+                            произошли какие-то ошибки
+        """
+        # Параметры запроса
+        page_number: int = 1
+        finish_loop: bool = False
+        results_list: list[Hotel] = list()
+        while not finish_loop:
+            site_results_list: list = self._get_site_responce(page=page_number)
+            if site_results_list is None:
+                return None
+            if site_results_list == []:
+                finish_loop = True
+            for hotel in site_results_list:
+                # Определяем расмтояние от центра города
+                distance: Optional[float] = None
+                for landmark in hotel['landmarks']:
+                    if landmark['label'] == 'Центр города':
+                        distance = float(
+                            str(landmark['distance'])
+                            .split(sep=' ')[0]
+                            .replace(',', '.')
+                        )
+                    break
+                if self.request_type == 'bestdeal':
+                    if distance < self.min_distance:
+                        continue
+                    if distance > self.max_distance:
+                        finish_loop = True
+                        break
+                results_list.append(
+                    Hotel(
+                        name=hotel['name'],
+                        address=hotel['address']['streetAddress'],
+                        distance=distance,
+                        price=int(
+                            str(hotel['ratePlan']['price']['current'])
+                            .split(sep=' ')[0]
+                            .replace(',', '')
+                        )
+                    )
+                )
+                if len(results_list) == self.hotels_count:
+                    finish_loop = True
+                    break
+            page_number += 1
+        return self._get_result_str(results_list)

@@ -1,10 +1,10 @@
 from bot import HotelsBot
 from telebot.types import Message
+from env import BOT_TOKEN
 
-# Токен для подключения к телеграм
-API_TOKEN = '1835960516:AAExqxVZ-LSaeoreuqF2Je3UPVgN8hK-jp4'
+
 # Создание объекта класса телеграм бота
-bot = HotelsBot(API_TOKEN)
+bot = HotelsBot(BOT_TOKEN)
 
 
 # Перехват всех текстовых сообщений к боту и направление их на фукцию парсинга
