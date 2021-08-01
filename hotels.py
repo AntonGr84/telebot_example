@@ -15,10 +15,10 @@ class Hotel:
     def __init__(
         self, name: str, address: str, distance: float, price: int
     ) -> None:
-        self.name = name
-        self.address = address
-        self.distance = distance
-        self.price = price
+        self.name: str = name
+        self.address: str = address
+        self.distance: float = distance
+        self.price: int = price
 
 
 class HotelsRequest:
@@ -193,7 +193,9 @@ class HotelsRequest:
                 results_list.append(
                     Hotel(
                         name=hotel['name'],
-                        address=hotel['address']['streetAddress'],
+                        address=dict(
+                            hotel['address']
+                        ).get('streetAddress', ''),
                         distance=distance,
                         price=int(
                             str(hotel['ratePlan']['price']['current'])

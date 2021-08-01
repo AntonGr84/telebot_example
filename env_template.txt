@@ -1,0 +1,3 @@
+BOT_TOKEN = Telegram bot token
+HOTELS_KEY = hotels.com API key 
+HOTELS_HOST = hotels.com API host
