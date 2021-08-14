@@ -48,7 +48,7 @@ class HotelsBot(TeleBot):
         if not isCityExists:
             self.send_message(
                 message.chat.id,
-                'Города с таким имененм не существует'
+                'Города с таким именем не существует'
             )
             return
         # Определяем следущих шаг бота
